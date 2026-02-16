@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCart } from '@/lib/cartContext';
+import { supabase } from '@/lib/supabaseClient';
+import { getVisitorId } from '@/lib/visitorId';
 import styles from './page.module.css';
 
 interface OrderItem {
@@ -20,93 +21,100 @@ interface OrderExtra {
 
 interface OrderData {
     orderId: string;
-    tableNumber: string;
+    orderType?: 'dine-in' | 'preorder';
+    tableNumber: string | null;
     items: OrderItem[];
     extras: OrderExtra[];
     totalAmount: number;
     timestamp: string;
-    status?: 'preparing' | 'ready' | 'served';
+    status: 'pending' | 'preparing' | 'ready' | 'delivered' | 'served';
     estimatedTime?: number; // in minutes
+    preorderDetails?: {
+        pickupTime: string;
+    } | null;
 }
 
 export default function TrackOrderPage() {
     const router = useRouter();
-    const { tableNumber: currentTableNumber } = useCart();
     const [orders, setOrders] = useState<OrderData[]>([]);
     const [currentTime, setCurrentTime] = useState(new Date());
 
     useEffect(() => {
-        // Load orders from localStorage - only current session and table orders
-        const loadOrders = () => {
-            // First, check for any orders that were marked as delivered by admin
-            const deliveredOrderIds = localStorage.getItem('rocky_da_adda_delivered_orders');
-            const deliveredIds: string[] = deliveredOrderIds ? JSON.parse(deliveredOrderIds) : [];
+        const loadMyOrders = async () => {
+            const visitorId = getVisitorId();
+            if (!visitorId) {
+                setOrders([]);
+                return;
+            }
 
-            const storedOrders = localStorage.getItem('customerOrders');
-            if (storedOrders) {
-                const parsedOrders = JSON.parse(storedOrders) as OrderData[];
+            // Query Supabase directly for this visitor's recent orders (last 2 hours)
+            const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
 
-                // Filter out delivered orders and expired orders
-                const activeOrders = parsedOrders.filter(order => {
-                    const orderTime = new Date(order.timestamp);
-                    const now = new Date();
-                    const hoursDiff = (now.getTime() - orderTime.getTime()) / (1000 * 60 * 60);
-                    const isRecentOrder = hoursDiff < 2; // Only show orders from last 2 hours
-                    const isCurrentTable = !currentTableNumber || order.tableNumber === currentTableNumber;
-                    const isNotDelivered = !deliveredIds.includes(order.orderId);
-                    return isRecentOrder && isCurrentTable && isNotDelivered;
-                });
+            if (supabase) {
+                const { data, error } = await supabase
+                    .from('orders')
+                    .select('*')
+                    .eq('visitor_id', visitorId)
+                    .neq('status', 'delivered')
+                    .gte('created_at', twoHoursAgo)
+                    .order('created_at', { ascending: false });
 
-                // If orders were filtered out due to delivery, update localStorage
-                if (activeOrders.length < parsedOrders.length) {
-                    if (activeOrders.length === 0) {
-                        localStorage.removeItem('customerOrders');
-                        sessionStorage.removeItem('lastOrder');
+                if (!error) {
+                    // Supabase query succeeded — trust its result even if empty
+                    if (data && data.length > 0) {
+                        const mappedOrders: OrderData[] = data.map(row => ({
+                            orderId: row.order_id,
+                            orderType: row.order_type,
+                            tableNumber: row.table_number,
+                            items: (row.items || []).map((i: Record<string, unknown>) => ({
+                                menuItem: { name: (i.menuItem as Record<string, unknown>)?.name || '' },
+                                quantity: i.quantity as number,
+                                selectedAddOns: ((i.selectedAddOns as Array<Record<string, unknown>>) || []).map(a => ({ name: a.name as string })),
+                                totalPrice: i.totalPrice as number
+                            })),
+                            extras: (row.extras || []).map((e: Record<string, unknown>) => ({
+                                extra: { name: (e.extra as Record<string, unknown>)?.name as string || '', price: (e.extra as Record<string, unknown>)?.price as number || 0 },
+                                quantity: e.quantity as number
+                            })),
+                            totalAmount: row.total_amount,
+                            timestamp: row.created_at,
+                            status: row.status,
+                            preorderDetails: row.preorder_details
+                        }));
+                        setOrders(mappedOrders);
                     } else {
-                        localStorage.setItem('customerOrders', JSON.stringify(activeOrders));
-                    }
-                }
-
-                setOrders(activeOrders.reverse()); // Most recent first
-            } else {
-                // Fallback: Check sessionStorage for last order
-                const lastOrder = sessionStorage.getItem('lastOrder');
-                if (lastOrder) {
-                    const order = JSON.parse(lastOrder);
-                    // Check if this order was delivered
-                    if (deliveredIds.includes(order.orderId)) {
-                        sessionStorage.removeItem('lastOrder');
+                        // No active orders — all delivered or none exist
                         setOrders([]);
-                        return;
                     }
-                    // Only show if order was placed within last 2 hours
-                    const orderTime = new Date(order.timestamp);
-                    const now = new Date();
-                    const hoursDiff = (now.getTime() - orderTime.getTime()) / (1000 * 60 * 60);
-                    if (hoursDiff < 2) {
-                        setOrders([order]);
-                    }
-                } else {
-                    setOrders([]);
+                    return;
                 }
+            }
+
+            // Fallback only if Supabase is unavailable/errored: check sessionStorage
+            const lastOrderStr = sessionStorage.getItem('lastOrder');
+            if (lastOrderStr) {
+                const lastOrder = JSON.parse(lastOrderStr);
+                setOrders([lastOrder]);
+            } else {
+                setOrders([]);
             }
         };
 
-        loadOrders();
+        loadMyOrders();
+
+        // Re-fetch every 5 seconds to get status updates
+        const pollInterval = setInterval(loadMyOrders, 5000);
 
         // Update current time every second
         const timeInterval = setInterval(() => {
             setCurrentTime(new Date());
         }, 1000);
 
-        // Refresh orders every 3 seconds (faster refresh for delivery status updates)
-        const ordersInterval = setInterval(loadOrders, 3000);
-
         return () => {
+            clearInterval(pollInterval);
             clearInterval(timeInterval);
-            clearInterval(ordersInterval);
         };
-    }, [currentTableNumber]);
+    }, []);
 
     const getTimeSinceOrder = (timestamp: string) => {
         const orderTime = new Date(timestamp);
@@ -170,28 +178,16 @@ export default function TrackOrderPage() {
         return Math.min(100, (elapsedMinutes / estimatedMinutes) * 100);
     };
 
+    // Use status directly from order object (synced from Supabase)
     const getOrderStatus = (order: OrderData) => {
-        // Check if admin has updated the status in localStorage
-        const adminOrders = localStorage.getItem('adminOrders');
-        if (adminOrders) {
-            const parsed = JSON.parse(adminOrders);
-            const adminOrder = parsed.find((o: OrderData) => o.orderId === order.orderId);
-            if (adminOrder?.status) {
-                return adminOrder.status;
-            }
-        }
+        if (order.status) return order.status;
 
-        // Default status logic based on time
+        // Fallback logic if status is missing
         const orderTime = new Date(order.timestamp);
         const elapsedMinutes = (currentTime.getTime() - orderTime.getTime()) / (1000 * 60);
-
-        if (elapsedMinutes < 15) {
-            return 'preparing';
-        } else if (elapsedMinutes < 30) {
-            return 'ready';
-        } else {
-            return 'served';
-        }
+        if (elapsedMinutes < 15) return 'preparing';
+        else if (elapsedMinutes < 30) return 'ready';
+        else return 'served';
     };
 
     if (orders.length === 0) {
@@ -238,15 +234,26 @@ export default function TrackOrderPage() {
                                 <div className={styles.orderHeader}>
                                     <div className={styles.orderIdSection}>
                                         <span className={styles.orderLabel}>Order</span>
-                                        <span className={styles.orderId}>#{order.orderId}</span>
+                                        <span className={styles.orderId}>#{order.orderId.slice(-6).toUpperCase()}</span>
                                     </div>
-                                    <div className={styles.tableTag}>
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <rect x="3" y="11" width="18" height="10" rx="2" />
-                                            <path d="M7 11V7a5 5 0 0110 0v4" />
-                                        </svg>
-                                        Table {order.tableNumber}
-                                    </div>
+
+                                    {order.orderType === 'preorder' ? (
+                                        <div className={styles.tableTag}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <circle cx="12" cy="12" r="10" />
+                                                <polyline points="12 6 12 12 16 14" />
+                                            </svg>
+                                            Pickup: {order.preorderDetails?.pickupTime || 'Time N/A'}
+                                        </div>
+                                    ) : (
+                                        <div className={styles.tableTag}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <rect x="3" y="11" width="18" height="10" rx="2" />
+                                                <path d="M7 11V7a5 5 0 0110 0v4" />
+                                            </svg>
+                                            Table {order.tableNumber}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Time Info */}
@@ -271,13 +278,13 @@ export default function TrackOrderPage() {
                                                 </div>
                                             )}
                                             {status === 'ready' && <span className={styles.readyIcon}>✅</span>}
-                                            {status === 'served' && <span className={styles.servedIcon}>🎉</span>}
+                                            {(status === 'served' || status === 'delivered') && <span className={styles.servedIcon}>🎉</span>}
                                         </div>
                                         <div className={styles.statusText}>
                                             <span className={styles.statusLabel}>
                                                 {status === 'preparing' && 'Preparing Your Order'}
                                                 {status === 'ready' && 'Ready for Pickup!'}
-                                                {status === 'served' && 'Order Served'}
+                                                {(status === 'served' || status === 'delivered') && 'Order Complete'}
                                             </span>
                                             {status === 'preparing' && remainingMinutes > 0 && (
                                                 <span className={styles.estimatedTime}>

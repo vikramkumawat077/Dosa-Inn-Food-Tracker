@@ -371,7 +371,7 @@ export default function KitchenPage() {
 
         await supabase.from('orders').update({
             items: updatedItems,
-            status: allReady ? 'ready' : 'preparing'
+            status: allReady ? 'delivered' : 'preparing'
         }).eq('order_id', orderId);
 
         loadData();
@@ -561,7 +561,7 @@ export default function KitchenPage() {
                                                     <span className={styles.orderMeta}>
                                                         {group.orderType === 'dine-in' && group.tableNumber
                                                             ? `Table ${group.tableNumber}`
-                                                            : group.orderType}
+                                                            : `Parcel #${group.orderId.slice(-4).toUpperCase()}`}
                                                     </span>
                                                     <span className={styles.orderTime}>
                                                         {getTimeAgo(group.createdAt)}

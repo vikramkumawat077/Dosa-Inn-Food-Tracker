@@ -11,19 +11,22 @@ import styles from './page.module.css';
 
 export default function MenuPage() {
     const router = useRouter();
-    const { tableNumber, totalItems, totalAmount } = useCart();
+    const { tableNumber, totalItems, totalAmount, orderType, preorderDetails } = useCart();
     const { menuItems, categories } = useMenu();
     const [activeCategory, setActiveCategory] = useState('all');
     const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Redirect if no table number
+    // Redirect if no table number (only for dine-in and if NOT a preorder)
     useEffect(() => {
-        if (!tableNumber) {
+        // If we have preorder details, we are definitely in preorder mode, so don't redirect
+        if (preorderDetails) return;
+
+        if (!tableNumber && orderType === 'dine-in') {
             router.push('/table');
         }
-    }, [tableNumber, router]);
+    }, [tableNumber, orderType, preorderDetails, router]);
 
     const handleItemClick = (item: MenuItem) => {
         if (!item.isAvailable) return;

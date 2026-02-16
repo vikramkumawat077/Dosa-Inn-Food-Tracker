@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import LeafLoader from '@/components/LeafLoader';
 import { useCart } from '@/lib/cartContext';
 import { useMenu } from '@/lib/menuContext';
+import { getVisitorId } from '@/lib/visitorId';
 import styles from './page.module.css';
 
 const UPI_APPS = [
@@ -22,9 +23,11 @@ export default function CheckoutPage() {
     const [selectedApp, setSelectedApp] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+    const orderCompleted = useRef(false);
 
-    // Redirect if cart is empty
+    // Redirect if cart is empty (but not after successful order placement)
     useEffect(() => {
+        if (orderCompleted.current) return;
         if (items.length === 0 && extras.length === 0) {
             router.push('/menu');
         }
@@ -77,6 +80,7 @@ export default function CheckoutPage() {
             timestamp: new Date().toISOString(),
             status: 'preparing',
             estimatedTime: 15, // Default 15 minutes
+            visitorId: getVisitorId(),
         };
 
         // Add order to shared context (visible in admin)
@@ -85,15 +89,8 @@ export default function CheckoutPage() {
         // Save to sessionStorage for order confirmation page
         sessionStorage.setItem('lastOrder', JSON.stringify(orderData));
 
-        // Save to localStorage for persistent order tracking
-        const existingOrders = localStorage.getItem('customerOrders');
-        const orders = existingOrders ? JSON.parse(existingOrders) : [];
-        orders.push(orderData);
-        // Keep only last 20 orders
-        const recentOrders = orders.slice(-20);
-        localStorage.setItem('customerOrders', JSON.stringify(recentOrders));
-
-        // Clear cart and redirect
+        // Mark order as completed to prevent empty-cart redirect from firing
+        orderCompleted.current = true;
         clearCart();
         router.push('/order-confirmed');
     };

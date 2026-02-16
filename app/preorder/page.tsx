@@ -42,7 +42,7 @@ function generateTimeSlots(): string[] {
 
 export default function PreorderPage() {
     const router = useRouter();
-    const { setOrderType, setPreorderDetails } = useCart();
+    const { setOrderType, setPreorderDetails, setTableNumber } = useCart();
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
@@ -77,6 +77,7 @@ export default function PreorderPage() {
         if (!validateForm()) return;
 
         setOrderType('preorder');
+        setTableNumber(null);
         setPreorderDetails({
             pickupTime: selectedTime!,
             customerName: name.trim(),

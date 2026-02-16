@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS orders (
     extras JSONB NOT NULL DEFAULT '[]',
     total_amount INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'pending',
+    visitor_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 -- ============================================

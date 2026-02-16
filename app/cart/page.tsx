@@ -12,6 +12,8 @@ export default function CartPage() {
         items,
         extras,
         tableNumber,
+        orderType,
+        preorderDetails,
         updateItemQuantity,
         removeItem,
         updateExtraQuantity,
@@ -19,12 +21,12 @@ export default function CartPage() {
         totalAmount
     } = useCart();
 
-    // Redirect if no table number
+    // Redirect if no table number (only for dine-in, preorders don't need a table)
     useEffect(() => {
-        if (!tableNumber) {
+        if (!tableNumber && orderType !== 'preorder' && !preorderDetails) {
             router.push('/table');
         }
-    }, [tableNumber, router]);
+    }, [tableNumber, orderType, preorderDetails, router]);
 
     const handleQuantityChange = (cartItemId: string, newQuantity: number) => {
         if (newQuantity < 1) {
@@ -70,13 +72,27 @@ export default function CartPage() {
                 </div>
             ) : (
                 <>
-                    {/* Table Info */}
+                    {/* Table / Preorder Info */}
                     <div className={styles.tableInfo}>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="11" width="18" height="10" rx="2" />
-                            <path d="M7 11V7a5 5 0 0110 0v4" />
+                            {orderType === 'preorder' ? (
+                                <>
+                                    <circle cx="12" cy="12" r="10" />
+                                    <path d="M12 6v6l4 2" />
+                                </>
+                            ) : (
+                                <>
+                                    <rect x="3" y="11" width="18" height="10" rx="2" />
+                                    <path d="M7 11V7a5 5 0 0110 0v4" />
+                                </>
+                            )}
                         </svg>
-                        <span>Delivering to Table {tableNumber}</span>
+                        <span>
+                            {orderType === 'preorder' && preorderDetails
+                                ? `Pickup at ${preorderDetails.pickupTime} — ${preorderDetails.customerName}`
+                                : `Delivering to Table ${tableNumber}`
+                            }
+                        </span>
                     </div>
 
                     {/* Cart Items */}

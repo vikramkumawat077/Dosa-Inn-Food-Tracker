@@ -16,7 +16,7 @@ interface HeaderProps {
 
 export default function Header({ showCart = true, showBack = false, onBack, title, showServing = true }: HeaderProps) {
     const router = useRouter();
-    const { totalItems, tableNumber } = useCart();
+    const { totalItems, tableNumber, orderType } = useCart();
 
     return (
         <header className={styles.header}>
@@ -52,7 +52,7 @@ export default function Header({ showCart = true, showBack = false, onBack, titl
                     </svg>
                 </Link>
 
-                {tableNumber && (
+                {tableNumber && orderType !== 'preorder' && (
                     <div className={styles.tableTag}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <rect x="3" y="11" width="18" height="10" rx="2" />

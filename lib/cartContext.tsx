@@ -45,7 +45,7 @@ interface CartContextType {
     tableNumber: string | null;
     orderType: OrderType;
     preorderDetails: PreorderDetails | null;
-    setTableNumber: (table: string) => void;
+    setTableNumber: (table: string | null) => void;
     setOrderType: (type: OrderType) => void;
     setPreorderDetails: (details: PreorderDetails) => void;
     addItem: (menuItem: MenuItem, quantity: number, addOns: AddOn[]) => void;
@@ -62,11 +62,58 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-    const [items, setItems] = useState<CartItem[]>([]);
-    const [extras, setExtras] = useState<CartExtra[]>([]);
-    const [tableNumber, setTableNumber] = useState<string | null>(null);
-    const [orderType, setOrderType] = useState<OrderType>('dine-in');
-    const [preorderDetails, setPreorderDetails] = useState<PreorderDetails | null>(null);
+    // Initialize state from localStorage if available
+    const [items, setItems] = useState<CartItem[]>(() => {
+        if (typeof window === 'undefined') return [];
+        const saved = localStorage.getItem('cart_items');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    const [extras, setExtras] = useState<CartExtra[]>(() => {
+        if (typeof window === 'undefined') return [];
+        const saved = localStorage.getItem('cart_extras');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    const [tableNumber, setTableNumber] = useState<string | null>(() => {
+        if (typeof window === 'undefined') return null;
+        return localStorage.getItem('table_number');
+    });
+
+    const [orderType, setOrderType] = useState<OrderType>(() => {
+        if (typeof window === 'undefined') return 'dine-in';
+        const saved = localStorage.getItem('order_type');
+        return (saved as OrderType) || 'dine-in';
+    });
+
+    const [preorderDetails, setPreorderDetails] = useState<PreorderDetails | null>(() => {
+        if (typeof window === 'undefined') return null;
+        const saved = localStorage.getItem('preorder_details');
+        return saved ? JSON.parse(saved) : null;
+    });
+
+    // Persistence effects
+    React.useEffect(() => {
+        localStorage.setItem('cart_items', JSON.stringify(items));
+    }, [items]);
+
+    React.useEffect(() => {
+        localStorage.setItem('cart_extras', JSON.stringify(extras));
+    }, [extras]);
+
+    React.useEffect(() => {
+        if (tableNumber) localStorage.setItem('table_number', tableNumber);
+        else localStorage.removeItem('table_number');
+    }, [tableNumber]);
+
+    React.useEffect(() => {
+        localStorage.setItem('order_type', orderType);
+    }, [orderType]);
+
+    React.useEffect(() => {
+        if (preorderDetails) localStorage.setItem('preorder_details', JSON.stringify(preorderDetails));
+        else localStorage.removeItem('preorder_details');
+    }, [preorderDetails]);
 
     const addItem = useCallback((menuItem: MenuItem, quantity: number, addOns: AddOn[]) => {
         const addOnsPrice = addOns.reduce((sum, a) => sum + a.price, 0);
@@ -128,8 +175,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const clearCart = useCallback(() => {
         setItems([]);
         setExtras([]);
-        setPreorderDetails(null);
-        setOrderType('dine-in');
+        // Preserve orderType and preorderDetails so the user stays in their flow
     }, []);
 
     const totalItems = items.reduce((sum, item) => sum + item.quantity, 0) +

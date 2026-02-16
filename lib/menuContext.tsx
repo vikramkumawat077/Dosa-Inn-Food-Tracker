@@ -43,6 +43,7 @@ interface Order {
     totalAmount: number;
     timestamp: string;
     status: 'pending' | 'preparing' | 'ready' | 'delivered';
+    visitorId?: string;
 }
 
 interface MenuContextType {
@@ -110,6 +111,7 @@ function rowToOrder(row: Record<string, unknown>): Order {
         totalAmount: row.total_amount as number,
         timestamp: row.created_at as string,
         status: row.status as Order['status'],
+        visitorId: (row.visitor_id as string) || undefined,
     };
 }
 
@@ -484,6 +486,7 @@ export function MenuProvider({ children }: { children: ReactNode }) {
                 total_amount: newOrder.totalAmount,
                 status: 'pending',
                 created_at: newOrder.timestamp,
+                visitor_id: newOrder.visitorId || null,
             });
         }
     }, [useSupabase]);
@@ -493,32 +496,6 @@ export function MenuProvider({ children }: { children: ReactNode }) {
 
         if (useSupabase) {
             await supabase!.from('orders').update({ status }).eq('order_id', orderId);
-        }
-
-        // Legacy: Also handle localStorage notifications for customer tab sync
-        if (status === 'delivered' && typeof window !== 'undefined') {
-            const deliveredOrdersKey = 'rocky_da_adda_delivered_orders';
-            const existingDelivered = localStorage.getItem(deliveredOrdersKey);
-            const deliveredList: string[] = existingDelivered ? JSON.parse(existingDelivered) : [];
-            if (!deliveredList.includes(orderId)) {
-                deliveredList.push(orderId);
-                localStorage.setItem(deliveredOrdersKey, JSON.stringify(deliveredList));
-            }
-            const customerOrders = localStorage.getItem('customerOrders');
-            if (customerOrders) {
-                const cOrders = JSON.parse(customerOrders);
-                const filteredOrders = cOrders.filter((o: { orderId: string }) => o.orderId !== orderId);
-                if (filteredOrders.length > 0) {
-                    localStorage.setItem('customerOrders', JSON.stringify(filteredOrders));
-                } else {
-                    localStorage.removeItem('customerOrders');
-                }
-            }
-            const lastOrder = sessionStorage.getItem('lastOrder');
-            if (lastOrder) {
-                const order = JSON.parse(lastOrder);
-                if (order.orderId === orderId) sessionStorage.removeItem('lastOrder');
-            }
         }
     }, [useSupabase]);
 

@@ -4,7 +4,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useMenu, Order } from '@/lib/menuContext';
 import { MenuItem } from '@/lib/menuData';
-import { supabase } from '@/lib/supabaseClient';
+import { createClient } from '@/lib/supabase/client';
 import styles from './page.module.css';
 
 // List of available menu images (from /public/menu-images/)
@@ -53,6 +53,7 @@ const defaultFormData: ItemFormData = {
 };
 
 export default function AdminPage() {
+    const supabase = createClient();
     const {
         menuItems,
         categories,
@@ -91,10 +92,9 @@ export default function AdminPage() {
 
     // Handle image upload to Supabase Storage
     const handleImageUpload = async (file: File) => {
-        if (!supabase) {
-            alert('Supabase is not configured. Please set up credentials in .env.local');
-            return;
-        }
+        // supabase is always defined with createClient, but auth check happens elsewhere or via RLS
+        // But we can check if url/key are missing if needed, but createBrowserClient doesn't expose it easily.
+        // Assuming env vars are present as app wouldn't load otherwise.
 
         setIsUploading(true);
         try {
@@ -345,6 +345,32 @@ export default function AdminPage() {
                     </Link>
                 </div>
                 <div className={styles.rushHourToggle}>
+                    <button
+                        onClick={async () => {
+                            await supabase.auth.signOut();
+                            window.location.href = '/login?logged_out=true';
+                        }}
+                        className={styles.logoutBtn}
+                        style={{
+                            marginRight: '15px',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            border: '1px solid #ddd',
+                            backgroundColor: 'white',
+                            cursor: 'pointer',
+                            color: '#666',
+                            fontSize: '14px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px'
+                        }}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+                        </svg>
+                        Logout
+                    </button>
+
                     <span className={rushHourMode ? styles.rushActive : ''}>
                         {rushHourMode ? '🔥 Rush Hour ON' : 'Rush Hour'}
                     </span>
