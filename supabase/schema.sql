@@ -34,12 +34,13 @@ CREATE TABLE IF NOT EXISTS orders (
     order_id TEXT PRIMARY KEY,
     order_type TEXT NOT NULL DEFAULT 'dine-in',
     table_number TEXT,
+    token_number INTEGER,
     preorder_details JSONB,
     items JSONB NOT NULL DEFAULT '[]',
     extras JSONB NOT NULL DEFAULT '[]',
     total_amount INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'pending',
-    visitor_id TEXT,
+    token_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 -- ============================================

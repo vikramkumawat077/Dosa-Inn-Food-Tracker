@@ -109,14 +109,17 @@ export default function ItemSheet({ item, isOpen, onClose }: ItemSheetProps) {
                             <h3 className={styles.sectionTitle}>Add-ons</h3>
                             <div className={styles.optionsList}>
                                 {item.addOns.map(addOn => (
-                                    <label key={addOn.id} className={styles.optionItem}>
+                                    <div
+                                        key={addOn.id}
+                                        className={styles.optionItem}
+                                        onClick={() => handleAddOnToggle(addOn)}
+                                    >
                                         <div
                                             className={`${styles.checkbox} ${selectedAddOns.find(a => a.id === addOn.id) ? styles.checked : ''}`}
-                                            onClick={() => handleAddOnToggle(addOn)}
                                         />
                                         <span className={styles.optionName}>{addOn.name}</span>
                                         <span className={styles.optionPrice}>+₹{addOn.price}</span>
-                                    </label>
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -129,14 +132,17 @@ export default function ItemSheet({ item, isOpen, onClose }: ItemSheetProps) {
                             <p className={styles.sectionSubtitle}>Added as separate items</p>
                             <div className={styles.optionsList}>
                                 {item.extras.map(extra => (
-                                    <label key={extra.id} className={styles.optionItem}>
+                                    <div
+                                        key={extra.id}
+                                        className={styles.optionItem}
+                                        onClick={() => handleExtraToggle(extra)}
+                                    >
                                         <div
                                             className={`${styles.checkbox} ${selectedExtras.find(e => e.id === extra.id) ? styles.checked : ''}`}
-                                            onClick={() => handleExtraToggle(extra)}
                                         />
                                         <span className={styles.optionName}>{extra.name}</span>
                                         <span className={styles.optionPrice}>+₹{extra.price}</span>
-                                    </label>
+                                    </div>
                                 ))}
                             </div>
                         </div>

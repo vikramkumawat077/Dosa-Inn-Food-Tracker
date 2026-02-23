@@ -30,6 +30,7 @@ interface Order {
     orderType: OrderType;
     tableNumber: string | null;
     preorderDetails: PreorderDetails | null;
+    tokenNumber: number;
     items: Array<{
         menuItem: { id: string; name: string; price: number };
         quantity: number;
@@ -43,7 +44,7 @@ interface Order {
     totalAmount: number;
     timestamp: string;
     status: 'pending' | 'preparing' | 'ready' | 'delivered';
-    visitorId?: string;
+    tokenId?: string;
 }
 
 interface MenuContextType {
@@ -106,12 +107,13 @@ function rowToOrder(row: Record<string, unknown>): Order {
         orderType: row.order_type as OrderType,
         tableNumber: (row.table_number as string) || null,
         preorderDetails: (row.preorder_details as PreorderDetails) || null,
+        tokenNumber: (row.token_number as number) || 0,
         items: (row.items as Order['items']) || [],
         extras: (row.extras as Order['extras']) || [],
         totalAmount: row.total_amount as number,
         timestamp: row.created_at as string,
         status: row.status as Order['status'],
-        visitorId: (row.visitor_id as string) || undefined,
+        tokenId: (row.token_id as string) || undefined,
     };
 }
 
@@ -476,18 +478,25 @@ export function MenuProvider({ children }: { children: ReactNode }) {
         setOrders(prev => [newOrder, ...prev]);
 
         if (useSupabase) {
-            await supabase!.from('orders').insert({
+            const { error: insertError } = await supabase!.from('orders').insert({
                 order_id: newOrder.orderId,
                 order_type: newOrder.orderType,
                 table_number: newOrder.tableNumber,
                 preorder_details: newOrder.preorderDetails,
+                token_number: newOrder.tokenNumber,
                 items: newOrder.items,
                 extras: newOrder.extras,
                 total_amount: newOrder.totalAmount,
                 status: 'pending',
                 created_at: newOrder.timestamp,
-                visitor_id: newOrder.visitorId || null,
+                token_id: newOrder.tokenId || null,
             });
+
+            if (insertError) {
+                console.error('🚨 Supabase Order Insert Failed:', insertError);
+                // Fallback: If insert fails, maybe we should try to save to localStorage locally?
+                // For now, just alerting the dev (user won't see console easily).
+            }
         }
     }, [useSupabase]);
 

@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import LeafLoader from '@/components/LeafLoader';
 import { useCart } from '@/lib/cartContext';
 import { useMenu } from '@/lib/menuContext';
-import { getVisitorId } from '@/lib/visitorId';
+import { getUniqueToken } from '@/lib/tokens';
 import styles from './page.module.css';
 
 const UPI_APPS = [
@@ -44,9 +44,24 @@ export default function CheckoutPage() {
         }, 2000);
     };
 
-    const handleSuccessComplete = () => {
-        // Generate order ID
-        const orderId = `RDA${Date.now().toString(36).toUpperCase()}`;
+    const handleSuccessComplete = async () => {
+        // Get token number: 
+        // For dine-in, use the one assigned at the start. 
+        // For preorder, generate a unique one now.
+        let tokenNumberValue: number;
+        if (orderType === 'dine-in' && tableNumber) {
+            tokenNumberValue = parseInt(tableNumber);
+        } else {
+            tokenNumberValue = await getUniqueToken();
+        }
+
+        // Generate order ID (Connected to Token Number)
+        const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const orderId = `#${tokenNumberValue}-RDA-${randomSuffix}`;
+
+        // Get authenticated session ID
+        const { ensureSession } = await import('@/lib/auth');
+        const tokenId = await ensureSession();
 
         // Prepare order data for admin
         const orderData = {
@@ -54,6 +69,7 @@ export default function CheckoutPage() {
             orderType,
             tableNumber: orderType === 'dine-in' ? (tableNumber || '0') : null,
             preorderDetails: orderType === 'preorder' ? preorderDetails : null,
+            tokenNumber: tokenNumberValue,
             items: items.map(item => ({
                 menuItem: {
                     id: item.menuItem.id,
@@ -80,7 +96,7 @@ export default function CheckoutPage() {
             timestamp: new Date().toISOString(),
             status: 'preparing',
             estimatedTime: 15, // Default 15 minutes
-            visitorId: getVisitorId(),
+            tokenId: tokenId || '',
         };
 
         // Add order to shared context (visible in admin)
@@ -141,7 +157,7 @@ export default function CheckoutPage() {
                                             <rect x="3" y="11" width="18" height="10" rx="2" />
                                             <path d="M7 11V7a5 5 0 0110 0v4" />
                                         </svg>
-                                        <span>Table {tableNumber}</span>
+                                        <span>Token No {tableNumber}</span>
                                     </>
                                 )}
                             </div>

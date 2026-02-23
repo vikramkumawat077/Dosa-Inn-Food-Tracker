@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/lib/cartContext';
 import styles from './Header.module.css';
@@ -17,6 +17,31 @@ interface HeaderProps {
 export default function Header({ showCart = true, showBack = false, onBack, title, showServing = true }: HeaderProps) {
     const router = useRouter();
     const { totalItems, tableNumber, orderType } = useCart();
+    const [activeTrackingLabel, setActiveTrackingLabel] = useState<string | null>(null);
+
+    useEffect(() => {
+        // Check for active order in session
+        const lastOrderStr = sessionStorage.getItem('lastOrder');
+        if (lastOrderStr) {
+            try {
+                const orderData = JSON.parse(lastOrderStr);
+                // Only show active token if it's not delivered yet
+                if (orderData.status !== 'delivered' && orderData.status !== 'served') {
+                    const isParcel = orderData.orderType === 'preorder';
+
+                    if (isParcel) {
+                        setActiveTrackingLabel(`Parcel ${orderData.orderId ? '#' + orderData.orderId.slice(-4).toUpperCase() : ''}`);
+                    } else if (orderData.tableNumber && orderData.tableNumber !== '0') {
+                        setActiveTrackingLabel(`Table ${orderData.tableNumber}`);
+                    } else if (orderData.tokenNumber) {
+                        setActiveTrackingLabel(`Token No. ${orderData.tokenNumber}`);
+                    }
+                }
+            } catch (e) {
+                // Ignore parse errors
+            }
+        }
+    }, []);
 
     return (
         <header className={styles.header}>
@@ -52,6 +77,16 @@ export default function Header({ showCart = true, showBack = false, onBack, titl
                     </svg>
                 </Link>
 
+                {/* Active Tracking Display */}
+                {activeTrackingLabel && (
+                    <Link href="/track-order" className={styles.tableTag} style={{ background: '#ffeb3b', color: '#000', textDecoration: 'none' }} title="Track Active Order">
+                        <span style={{ fontWeight: 'bold' }}>
+                            {activeTrackingLabel}
+                        </span>
+                    </Link>
+                )}
+
+                {/* Current Cart Table Number */}
                 {tableNumber && orderType !== 'preorder' && (
                     <div className={styles.tableTag}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

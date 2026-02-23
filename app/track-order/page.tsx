@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import { getVisitorId } from '@/lib/visitorId';
+import { getSessionUserId } from '@/lib/auth';
 import styles from './page.module.css';
 
 interface OrderItem {
@@ -23,6 +23,7 @@ interface OrderData {
     orderId: string;
     orderType?: 'dine-in' | 'preorder';
     tableNumber: string | null;
+    tokenNumber: number;
     items: OrderItem[];
     extras: OrderExtra[];
     totalAmount: number;
@@ -38,49 +39,97 @@ export default function TrackOrderPage() {
     const router = useRouter();
     const [orders, setOrders] = useState<OrderData[]>([]);
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [debugId, setDebugId] = useState<string | null>(null);
 
     useEffect(() => {
         const loadMyOrders = async () => {
-            const visitorId = getVisitorId();
+            const visitorId = await getSessionUserId();
+            setDebugId(visitorId);
+
             if (!visitorId) {
                 setOrders([]);
                 return;
             }
 
+            // Figure out if the user is tracking a specific order
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlOrderId = urlParams.get('id');
+            const lastOrderStr = sessionStorage.getItem('lastOrder');
+            const sessionOrderId = lastOrderStr ? JSON.parse(lastOrderStr).orderId : null;
+
+            const targetOrderId = urlOrderId || sessionOrderId;
+
             // Query Supabase directly for this visitor's recent orders (last 2 hours)
             const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
 
             if (supabase) {
-                const { data, error } = await supabase
+                let query = supabase
                     .from('orders')
                     .select('*')
-                    .eq('visitor_id', visitorId)
-                    .neq('status', 'delivered')
+                    .eq('token_id', visitorId)
                     .gte('created_at', twoHoursAgo)
                     .order('created_at', { ascending: false });
+
+                // If user has a specific order they just placed, only track that one
+                if (targetOrderId) {
+                    query = query.eq('order_id', targetOrderId);
+                }
+
+                const { data, error } = await query;
 
                 if (!error) {
                     // Supabase query succeeded — trust its result even if empty
                     if (data && data.length > 0) {
-                        const mappedOrders: OrderData[] = data.map(row => ({
-                            orderId: row.order_id,
-                            orderType: row.order_type,
-                            tableNumber: row.table_number,
-                            items: (row.items || []).map((i: Record<string, unknown>) => ({
-                                menuItem: { name: (i.menuItem as Record<string, unknown>)?.name || '' },
-                                quantity: i.quantity as number,
-                                selectedAddOns: ((i.selectedAddOns as Array<Record<string, unknown>>) || []).map(a => ({ name: a.name as string })),
-                                totalPrice: i.totalPrice as number
-                            })),
-                            extras: (row.extras || []).map((e: Record<string, unknown>) => ({
-                                extra: { name: (e.extra as Record<string, unknown>)?.name as string || '', price: (e.extra as Record<string, unknown>)?.price as number || 0 },
-                                quantity: e.quantity as number
-                            })),
-                            totalAmount: row.total_amount,
-                            timestamp: row.created_at,
-                            status: row.status,
-                            preorderDetails: row.preorder_details
-                        }));
+                        const deliveredMapStr = sessionStorage.getItem('deliveredOrdersTime');
+                        const deliveredMap: Record<string, number> = deliveredMapStr ? JSON.parse(deliveredMapStr) : {};
+                        let mapChanged = false;
+
+                        const mappedOrders: OrderData[] = [];
+
+                        data.forEach(row => {
+                            if (row.status === 'delivered' || row.status === 'served') {
+                                if (!deliveredMap[row.order_id]) {
+                                    deliveredMap[row.order_id] = Date.now();
+                                    mapChanged = true;
+                                }
+                                const timeSinceDelivered = Date.now() - deliveredMap[row.order_id];
+                                if (timeSinceDelivered > 60000) {
+                                    return; // Check next order
+                                }
+                            }
+
+                            mappedOrders.push({
+                                orderId: row.order_id,
+                                orderType: row.order_type,
+                                tableNumber: row.table_number,
+                                tokenNumber: row.token_number || 0,
+                                items: (row.items || []).map((i: Record<string, unknown>) => ({
+                                    menuItem: { name: (i.menuItem as Record<string, unknown>)?.name || '' },
+                                    quantity: i.quantity as number,
+                                    selectedAddOns: ((i.selectedAddOns as Array<Record<string, unknown>>) || []).map(a => ({ name: a.name as string })),
+                                    totalPrice: i.totalPrice as number
+                                })),
+                                extras: (row.extras || []).map((e: Record<string, unknown>) => ({
+                                    extra: { name: (e.extra as Record<string, unknown>)?.name as string || '', price: (e.extra as Record<string, unknown>)?.price as number || 0 },
+                                    quantity: e.quantity as number
+                                })),
+                                totalAmount: row.total_amount,
+                                timestamp: row.created_at,
+                                status: row.status,
+                                preorderDetails: row.preorder_details
+                            });
+                        });
+
+                        if (mapChanged) {
+                            sessionStorage.setItem('deliveredOrdersTime', JSON.stringify(deliveredMap));
+                        }
+
+                        // Keep the header in sync with the most recent tracked order
+                        const activeTrackedOrder = mappedOrders.find(o => o.status !== 'delivered' && o.status !== 'served') || mappedOrders[0];
+                        if (activeTrackedOrder) {
+                            sessionStorage.setItem('lastOrder', JSON.stringify(activeTrackedOrder));
+                        }
+
                         setOrders(mappedOrders);
                     } else {
                         // No active orders — all delivered or none exist
@@ -91,9 +140,9 @@ export default function TrackOrderPage() {
             }
 
             // Fallback only if Supabase is unavailable/errored: check sessionStorage
-            const lastOrderStr = sessionStorage.getItem('lastOrder');
-            if (lastOrderStr) {
-                const lastOrder = JSON.parse(lastOrderStr);
+            const fallbackOrderStr = sessionStorage.getItem('lastOrder');
+            if (fallbackOrderStr) {
+                const lastOrder = JSON.parse(fallbackOrderStr);
                 setOrders([lastOrder]);
             } else {
                 setOrders([]);
@@ -233,8 +282,20 @@ export default function TrackOrderPage() {
                                 {/* Order Header */}
                                 <div className={styles.orderHeader}>
                                     <div className={styles.orderIdSection}>
-                                        <span className={styles.orderLabel}>Order</span>
-                                        <span className={styles.orderId}>#{order.orderId.slice(-6).toUpperCase()}</span>
+                                        <span className={styles.orderLabel}>
+                                            {order.orderType === 'preorder'
+                                                ? 'Parcel'
+                                                : (order.tableNumber && order.tableNumber !== '0')
+                                                    ? 'Table'
+                                                    : 'Token No.'}
+                                        </span>
+                                        <span className={styles.orderId}>
+                                            {order.orderType === 'preorder'
+                                                ? (order.orderId ? '#' + order.orderId.slice(-4).toUpperCase() : '')
+                                                : (order.tableNumber && order.tableNumber !== '0')
+                                                    ? '#' + order.tableNumber
+                                                    : '#' + order.tokenNumber}
+                                        </span>
                                     </div>
 
                                     {order.orderType === 'preorder' ? (
@@ -251,7 +312,7 @@ export default function TrackOrderPage() {
                                                 <rect x="3" y="11" width="18" height="10" rx="2" />
                                                 <path d="M7 11V7a5 5 0 0110 0v4" />
                                             </svg>
-                                            Table {order.tableNumber}
+                                            Dine-In
                                         </div>
                                     )}
                                 </div>
@@ -357,6 +418,10 @@ export default function TrackOrderPage() {
                         Back to Menu
                     </Link>
                 </div>
+            </div>
+            {/* Debug Info */}
+            <div style={{ padding: '20px', textAlign: 'center', opacity: 0.5, fontSize: '12px' }}>
+                Visitor ID: {debugId || 'Not signed in'}
             </div>
         </div>
     );

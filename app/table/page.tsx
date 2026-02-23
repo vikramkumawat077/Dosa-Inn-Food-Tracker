@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/lib/cartContext';
 import LeafLoader from '@/components/LeafLoader';
+import { getUniqueToken } from '@/lib/tokens';
 import styles from './page.module.css';
 
 export default function TablePage() {
@@ -12,37 +13,29 @@ export default function TablePage() {
     const { setTableNumber } = useCart();
     const [table, setTable] = useState('');
     const [showLoader, setShowLoader] = useState(false);
-    const [error, setError] = useState('');
+    const [isAssigning, setIsAssigning] = useState(true);
 
-    const handleKeyPress = (key: string) => {
-        if (key === 'backspace') {
-            setTable(prev => prev.slice(0, -1));
-        } else if (key === 'clear') {
-            setTable('');
-        } else if (table.length < 3) {
-            setTable(prev => prev + key);
-        }
-        setError('');
-    };
+    useEffect(() => {
+        const assignToken = async () => {
+            const token = await getUniqueToken();
+            setTable(token.toString());
+            setIsAssigning(false);
+        };
+        assignToken();
+    }, []);
 
     const handleContinue = () => {
-        if (!table || table === '0') {
-            setError('Please enter a valid table number');
-            return;
-        }
+        if (!table) return;
 
         // Check if there's an existing session for a different table
-        // Only clear orders if switching to a different table
         const existingOrders = localStorage.getItem('customerOrders');
         if (existingOrders) {
             const orders = JSON.parse(existingOrders);
-            // Check if any orders belong to a different table
             const hasDifferentTableOrders = orders.some((order: { tableNumber: string }) =>
                 order.tableNumber !== table
             );
 
             if (hasDifferentTableOrders) {
-                // Clear orders from different tables
                 const sameTableOrders = orders.filter((order: { tableNumber: string }) =>
                     order.tableNumber === table
                 );
@@ -53,7 +46,6 @@ export default function TablePage() {
                 }
                 sessionStorage.removeItem('lastOrder');
             }
-            // If same table, keep the existing orders (rejoin session)
         }
 
         setTableNumber(table);
@@ -83,65 +75,40 @@ export default function TablePage() {
                 {/* Content */}
                 <div className={styles.content}>
                     <div className={styles.titleSection}>
-                        <h1 className={styles.title}>What's your table?</h1>
-                        <p className={styles.subtitle}>Check the number on your table stand</p>
+                        <h1 className={styles.title}>Welcome to Rocky Da Adda</h1>
+                        <p className={styles.subtitle}>
+                            {isAssigning ? 'Assigning your token...' : 'Your unique token number has been assigned'}
+                        </p>
                     </div>
 
-                    {/* Table number display */}
+                    {/* Token number display */}
                     <div className={styles.displayWrapper}>
-                        <div className={`${styles.display} ${error ? styles.displayError : ''}`}>
-                            {table || <span className={styles.placeholder}>00</span>}
+                        <div className={styles.display}>
+                            {isAssigning ? (
+                                <span className={styles.placeholder}>...</span>
+                            ) : (
+                                `#${table}`
+                            )}
                         </div>
-                        {error && <p className={styles.errorText}>{error}</p>}
-                    </div>
-
-                    {/* Keypad */}
-                    <div className={styles.keypad}>
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-                            <button
-                                key={num}
-                                className={styles.key}
-                                onClick={() => handleKeyPress(num.toString())}
-                            >
-                                {num}
-                            </button>
-                        ))}
-                        <button
-                            className={`${styles.key} ${styles.keyAction}`}
-                            onClick={() => handleKeyPress('clear')}
-                        >
-                            C
-                        </button>
-                        <button
-                            className={styles.key}
-                            onClick={() => handleKeyPress('0')}
-                        >
-                            0
-                        </button>
-                        <button
-                            className={`${styles.key} ${styles.keyAction}`}
-                            onClick={() => handleKeyPress('backspace')}
-                        >
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z" strokeLinecap="round" strokeLinejoin="round" />
-                                <line x1="18" y1="9" x2="12" y2="15" strokeLinecap="round" />
-                                <line x1="12" y1="9" x2="18" y2="15" strokeLinecap="round" />
-                            </svg>
-                        </button>
+                        {!isAssigning && (
+                            <p className={styles.helperText}>Please remember this token for your visit</p>
+                        )}
                     </div>
                 </div>
 
                 {/* CTA */}
                 <div className={styles.ctaWrapper}>
                     <button
-                        className={`${styles.ctaBtn} ${!table ? styles.ctaBtnDisabled : ''}`}
+                        className={`${styles.ctaBtn} ${isAssigning ? styles.ctaBtnDisabled : ''}`}
                         onClick={handleContinue}
-                        disabled={!table}
+                        disabled={isAssigning}
                     >
-                        Continue to Menu
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                        {isAssigning ? 'Generating Token...' : 'Continue to Menu'}
+                        {!isAssigning && (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        )}
                     </button>
                 </div>
             </div>

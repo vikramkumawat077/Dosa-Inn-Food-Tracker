@@ -8,6 +8,7 @@ import styles from './page.module.css';
 interface OrderData {
     orderId: string;
     tableNumber: string;
+    tokenNumber: number;
     items: Array<{
         menuItem: { name: string };
         quantity: number;
@@ -101,8 +102,8 @@ export default function OrderConfirmedPage() {
                 {/* Order Details Card */}
                 <div className={styles.orderCard}>
                     <div className={styles.orderId}>
-                        <span className={styles.orderLabel}>Order ID</span>
-                        <span className={styles.orderValue}>{order.orderId}</span>
+                        <span className={styles.orderLabel}>Token No.</span>
+                        <span className={styles.orderValue}>#{order.tokenNumber}</span>
                     </div>
 
                     <div className={styles.divider} />
@@ -114,7 +115,7 @@ export default function OrderConfirmedPage() {
                         </svg>
                         <div>
                             <span className={styles.tableLabel}>Delivering to</span>
-                            <span className={styles.tableNumber}>Table {order.tableNumber}</span>
+                            <span className={styles.tableNumber}>Token No {order.tableNumber}</span>
                         </div>
                     </div>
 
@@ -169,7 +170,7 @@ export default function OrderConfirmedPage() {
 
                 {/* CTAs */}
                 <div className={styles.ctaButtons}>
-                    <Link href="/track-order" className={styles.trackOrderBtn}>
+                    <Link href={`/track-order?id=${order.orderId}`} className={styles.trackOrderBtn}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <circle cx="12" cy="12" r="10" />
                             <path d="M12 6v6l4 2" />

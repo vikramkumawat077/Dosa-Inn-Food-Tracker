@@ -3,6 +3,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
+import { useMenu } from '@/lib/menuContext';
+import KitchenAnnouncer from '@/components/KitchenAnnouncer';
+import VoiceAssistant from '@/components/VoiceAssistant';
 import styles from './page.module.css';
 
 // ============ Types ============
@@ -36,6 +39,7 @@ interface KitchenOrder {
     order_id: string;
     order_type: string;
     table_number: string | null;
+    token_number: number;
     items: OrderItem[];
     status: 'pending' | 'preparing' | 'ready' | 'delivered';
     created_at: string;
@@ -46,6 +50,7 @@ interface ChefOrderGroup {
     orderId: string;
     orderType: string;
     tableNumber: string | null;
+    tokenNumber: number;
     createdAt: string;
     items: Array<OrderItem & { itemIndex: number }>;
 }
@@ -203,10 +208,13 @@ function AssignModal({
 // ============ Main Kitchen Page ============
 
 export default function KitchenPage() {
+    // Use global menu context for orders to ensure sync with Admin
+    const { orders: allOrders } = useMenu();
+
+    // Local state only for kitchen-specific UI
     const [chefs, setChefs] = useState<Chef[]>([]);
     const [categories, setCategories] = useState<CategoryInfo[]>([]);
     const [assignments, setAssignments] = useState<ChefCategory[]>([]);
-    const [orders, setOrders] = useState<KitchenOrder[]>([]);
     const [menuItemCategories, setMenuItemCategories] = useState<Record<string, string>>({});
 
     // UI state
@@ -216,25 +224,37 @@ export default function KitchenPage() {
     const [showSettings, setShowSettings] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-    // ===== Data Loading =====
+    // Filter orders for display (Pending & Preparing only)
+    const orders = useMemo(() => {
+        return allOrders
+            .filter(o => o.status === 'pending' || o.status === 'preparing')
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+            .map(o => ({
+                order_id: o.orderId,
+                order_type: o.orderType,
+                table_number: o.tableNumber,
+                token_number: o.tokenNumber,
+                items: o.items as OrderItem[],
+                status: o.status,
+                created_at: o.timestamp
+            }));
+    }, [allOrders]);
+
+    // ===== Data Loading (Kitchen specific settings) =====
 
     const loadData = useCallback(async () => {
         if (!supabase) return;
 
-        const [chefsRes, catsRes, assignRes, ordersRes, menuRes] = await Promise.all([
+        const [chefsRes, catsRes, assignRes, menuRes] = await Promise.all([
             supabase.from('chefs').select('*').order('created_at'),
             supabase.from('categories').select('id, name, icon').order('sort_order'),
             supabase.from('chef_categories').select('*'),
-            supabase.from('orders').select('*')
-                .in('status', ['pending', 'preparing'])
-                .order('created_at', { ascending: true }),
             supabase.from('menu_items').select('id, category_id'),
         ]);
 
         if (chefsRes.data) setChefs(chefsRes.data);
         if (catsRes.data) setCategories(catsRes.data);
         if (assignRes.data) setAssignments(assignRes.data);
-        if (ordersRes.data) setOrders(ordersRes.data as KitchenOrder[]);
         if (menuRes.data) {
             const map: Record<string, string> = {};
             menuRes.data.forEach((item: { id: string; category_id: string }) => {
@@ -248,13 +268,13 @@ export default function KitchenPage() {
         loadData();
     }, [loadData]);
 
-    // Realtime subscriptions
+    // Realtime subscriptions for Kitchen settings only
+    // Orders are handled by MenuContext
     useEffect(() => {
         if (!supabase) return;
 
         const channel = supabase
-            .channel('kitchen-realtime')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => loadData())
+            .channel('kitchen-settings-realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'chefs' }, () => loadData())
             .on('postgres_changes', { event: '*', schema: 'public', table: 'chef_categories' }, () => loadData())
             .subscribe();
@@ -293,6 +313,7 @@ export default function KitchenPage() {
                     orderId: order.order_id,
                     orderType: order.order_type,
                     tableNumber: order.table_number,
+                    tokenNumber: order.token_number || 0,
                     createdAt: order.created_at,
                     items
                 });
@@ -556,11 +577,11 @@ export default function KitchenPage() {
                                             <div key={group.orderId} className={styles.orderCard}>
                                                 <div className={styles.orderHeader}>
                                                     <span className={styles.orderId}>
-                                                        #{group.orderId.slice(-6).toUpperCase()}
+                                                        Token #{group.tokenNumber}
                                                     </span>
                                                     <span className={styles.orderMeta}>
                                                         {group.orderType === 'dine-in' && group.tableNumber
-                                                            ? `Table ${group.tableNumber}`
+                                                            ? `Token No ${group.tableNumber}`
                                                             : `Parcel #${group.orderId.slice(-4).toUpperCase()}`}
                                                     </span>
                                                     <span className={styles.orderTime}>
@@ -637,6 +658,7 @@ export default function KitchenPage() {
                     </div>
                 </div>
             )}
+            <KitchenAnnouncer />
         </div>
     );
 }

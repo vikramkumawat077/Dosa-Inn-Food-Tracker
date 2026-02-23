@@ -13,7 +13,7 @@ async function check() {
     const { data: cats, error: e1 } = await supabase.from('categories').select('id');
     const { data: items, error: e2 } = await supabase.from('menu_items').select('id');
     const { data: settings, error: e3 } = await supabase.from('settings').select('key');
-    const { data: orders, error: e4 } = await supabase.from('orders').select('order_id');
+    const { data: orders, error: e4 } = await supabase.from('orders').select('order_id, token_number');
 
     if (e1 || e2 || e3 || e4) {
         console.log('ERRORS:', e1?.message, e2?.message, e3?.message, e4?.message);

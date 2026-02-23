@@ -55,14 +55,18 @@ const parathaAddOns: AddOn[] = [
 ];
 
 const parathaExtras: Extra[] = [
-    { id: 'green-chutney', name: 'Green Chutney', price: 5 },
-    { id: 'red-chutney', name: 'Red Chutney', price: 5 },
+    { id: 'dhaniya-chutney', name: 'Dhaniya Chutney', price: 10 },
+    { id: 'schezwan-chutney', name: 'Schezwan Chutney', price: 10 },
 ];
 
 // Add-ons for Pav Bhaji
 const pavBhajiAddOns: AddOn[] = [
     { id: 'cheese-pav', name: 'Cheese', price: 25 },
     { id: 'butter-pav', name: 'Butter', price: 10 },
+    { id: 'extra-pav', name: 'Pav', price: 10 },
+    { id: 'butter-pav-full', name: 'Butter Pav', price: 20 },
+    { id: 'masala-pav', name: 'Masala Pav', price: 20 },
+    { id: 'plain-pav-full', name: 'Plain Pav', price: 10 },
 ];
 
 // Add-ons for Combos (Food)
