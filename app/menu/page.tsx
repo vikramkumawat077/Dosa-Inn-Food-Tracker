@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import Header from '@/components/Header';
 import ItemSheet from '@/components/ItemSheet';
 import { MenuItem } from '@/lib/menuData';
@@ -17,6 +18,8 @@ export default function MenuPage() {
     const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => { setMounted(true); }, []);
 
     // Redirect if no table number (only for dine-in and if NOT a preorder)
     useEffect(() => {
@@ -121,7 +124,7 @@ export default function MenuPage() {
                     </div>
                 ) : (
                     <div className={styles.itemsGrid}>
-                        {filteredItems.map(item => (
+                        {filteredItems.map((item, index) => (
                             <div
                                 key={item.id}
                                 className={styles.itemCard}
@@ -130,10 +133,17 @@ export default function MenuPage() {
                                 {/* Item Image with Veg Badge */}
                                 <div className={styles.itemImageWrapper}>
                                     {item.image ? (
-                                        <img
+                                        <Image
                                             src={item.image}
                                             alt={item.name}
                                             className={styles.itemImageReal}
+                                            width={300}
+                                            height={300}
+                                            sizes="(max-width: 480px) 50vw, 240px"
+                                            loading={index < 4 ? 'eager' : 'lazy'}
+                                            priority={index < 2}
+                                            quality={75}
+                                            unoptimized={false}
                                         />
                                     ) : (
                                         <div className={styles.itemImage}>
@@ -172,7 +182,7 @@ export default function MenuPage() {
             </div>
 
             {/* Floating Cart Button */}
-            {totalItems > 0 && (
+            {mounted && totalItems > 0 && (
                 <div className={styles.floatingCart} onClick={() => router.push('/cart')}>
                     <div className={styles.cartInfo}>
                         <span className={styles.cartItems}>{totalItems} item{totalItems !== 1 ? 's' : ''}</span>
