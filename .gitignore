@@ -39,3 +39,34 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/whatsapp-service/node_modules
+/whatsapp-service/.baileys_auth/
+
+# uploaded images live in Azure Blob Storage, not in the repo
+/public/uploads/
+# Cloned cat-printer reference repo (protocol research only)
+/cat-printer/
+
+# Runtime / business data (not seed data)
+/data/app.db
+/data/app.db-shm
+/data/app.db-wal
+/data/orders.json
+/data/shared_carts.json
+/data/log_orders.jsonl
+
+# Debug probe artifacts
+/probe.jsonl
+/website.jsonl
+
+# pm2 logs
+/logs/
+*.log
+
+# Electron build output
+/electron-admin/node_modules/
+/electron-admin/dist/
+
+# Unrelated nested project (has its own git repo)
+/Snova/

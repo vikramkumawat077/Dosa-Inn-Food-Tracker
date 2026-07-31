@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useMenu } from '@/lib/menuContext';
 import styles from './page.module.css';
 import LeafLoader from '@/components/LeafLoader';
 
@@ -9,9 +10,18 @@ const ADMIN_PASSWORD = 'rocky123'; // Simple password for demo - in production u
 
 export default function LandingPage() {
   const router = useRouter();
+  const { restaurantName, tagline, legalName } = useMenu();
   const [showLoader, setShowLoader] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Both CTAs on this page lead here — warm the router cache for whichever
+  // the visitor picks so the transition feels instant instead of waiting on
+  // a fresh network round-trip, especially over flaky campus WiFi.
+  useEffect(() => {
+    router.prefetch('/table');
+    router.prefetch('/preorder');
+  }, [router]);
 
   // Parallax effect on mouse/touch move
   const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
@@ -129,7 +139,7 @@ export default function LandingPage() {
           >
             <img
               src="/logo.png"
-              alt="Rocky Da Adda - 100% Pure Veg"
+              alt={`${restaurantName}${tagline ? ` - ${tagline}` : ''}`}
               className={styles.logo}
             />
             <div className={styles.logoGlow} />
@@ -164,10 +174,33 @@ export default function LandingPage() {
               <circle cx="12" cy="12" r="10" />
               <path d="M12 6v6l4 2" />
             </svg>
-            <span>Skip the Wait</span>
+            <span>Takeaway</span>
           </button>
           <p className={styles.ctaSubtext}>Scan. Order. Eat. Repeat.</p>
         </div>
+
+        {/* Legal footer — sits inside .container (position:relative) so absolute bottom works */}
+        <footer style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: '12px 24px',
+          textAlign: 'center',
+          fontSize: '0.72rem',
+          color: 'rgba(255,255,255,0.45)',
+          letterSpacing: '0.02em',
+        }}>
+          {(legalName || restaurantName) && (
+            <span itemScope itemType="https://schema.org/FoodEstablishment">
+              <span itemProp="legalName">{legalName || restaurantName}</span>
+              {' · '}
+            </span>
+          )}
+          <a href="/about" style={{ color: 'inherit', textDecoration: 'underline' }}>
+            About &amp; Policies
+          </a>
+        </footer>
       </div>
     </>
   );

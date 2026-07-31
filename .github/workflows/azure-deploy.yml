@@ -1,0 +1,56 @@
+# Retired — we no longer deploy to Azure Web App (moved to a self-hosted
+# Windows machine, see deploy-windows.yml). Kept around, manual-trigger-only,
+# in case Azure hosting is ever needed again.
+name: Deploy to Azure Web App
+
+on:
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20.x'
+  AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}   # set in repo → Settings → Variables → Actions
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js (standalone)
+        env:
+          NEXT_PUBLIC_BASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL }}
+        run: npm run build
+
+      # Copy only static assets (no uploads — those live in Azure Blob Storage)
+      - name: Assemble standalone package
+        run: |
+          cp -r public .next/standalone/public
+          rm -rf .next/standalone/public/uploads
+          cp -r .next/static .next/standalone/.next/static
+
+      - name: Zip standalone for deploy
+        run: |
+          cd .next/standalone
+          zip -r ../../deploy.zip . -x "*.git*"
+          echo "Deploy zip size: $(du -sh ../../deploy.zip | cut -f1)"
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: deploy.zip
